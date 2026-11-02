@@ -102,6 +102,12 @@ They refresh in the background — at most one refresher machine-wide, Codex eve
 
 Claude Code pipes a JSON snapshot of the session to the status-line command. `cc-panel` hands it to **ccstatusline** with a generated data-only config (no colors, values separated by `␟`), reads TTFT and tool time from the session transcript incrementally, and lays everything out on a grid with true-color ANSI. ccstatusline's output is cached per session and recomputed only when the model, cost, tokens or rate limits change (or every 30 s), so the one-second refresh stays cheap.
 
+## Side-panel mode (`--quiet`)
+
+On every refresh `cc-panel` also writes the current session's values to `~/.cache/cc-panel/live/<pid>.json`, keyed by the `claude` process ID (the nearest ancestor named `claude`, up to 4 levels up). The file stays local (no network calls) and holds `at`, `pid`, `cwd`, `busy`, `model`, `effort`, `cost`, `clock`, `ctx`, `ctxlen`, `cache`, `speed`, `tokens`, `sid`, `week`, `fable`, `ttft`, `tool`, `ttl_at` (prompt-cache expiry, Unix seconds) and `week_reset` (weekly reset, Unix seconds).
+
+If you show these numbers in an external UI instead of the terminal — for example, a custom mod in the Herdr desktop right sidebar that follows the active tab's `claude` PID and shows shared subscription quotas underneath — set `"command": "~/.local/bin/cc-panel --quiet"` in `statusLine`. `--quiet` prints nothing so Claude Code draws no status line in the terminal, while still writing `live/<pid>.json` every second and triggering the background refreshes for `quotas.json` and `fable.json`.
+
 ## FAQ
 
 **How do I customize the Claude Code status line?**

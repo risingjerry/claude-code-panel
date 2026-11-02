@@ -62,6 +62,13 @@ class PanelTest(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertEqual(len(plain(out.stdout).strip("\n").split("\n")), 3)
 
+    def test_quiet_draws_nothing(self):
+        env = {**os.environ, "CC_PANEL_CCSTATUSLINE": "/nonexistent", "HOME": os.path.join(ROOT, ".test-home"),
+               "CC_PANEL_QUOTAS": "0"}
+        out = subprocess.run([sys.executable, SCRIPT, "--quiet"], input=json.dumps({"session_id": "t"}), env=env,
+                             capture_output=True, text=True, timeout=20)
+        self.assertEqual((out.returncode, out.stdout), (0, ""), out.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
