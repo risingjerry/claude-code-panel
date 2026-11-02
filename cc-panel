@@ -598,6 +598,40 @@ def usage_values(d, j, usage):
     d["fable"] = d["fable"] or ""
 
 
+def claude_pid():
+    """The Claude Code process this status line belongs to: the nearest ancestor named claude.
+    Side panels (Herdr) find a terminal's session by that pid."""
+    pid = os.getppid()
+    for _ in range(4):
+        try:
+            ppid, comm = subprocess.run(["ps", "-o", "ppid=,comm=", "-p", str(pid)], capture_output=True,
+                                        text=True, timeout=1).stdout.split(None, 1)
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            return None
+        if "claude" in os.path.basename(comm.strip()).lower():
+            return pid
+        pid = int(ppid)
+    return None
+
+
+def write_live(j, d, first, tool, busy, now):
+    """One small file per running session, keyed by the Claude Code pid, for side panels to read."""
+    pid = claude_pid()
+    if not pid:
+        return
+    live = os.path.join(CACHE, "live")
+    os.makedirs(live, exist_ok=True)
+    rl = j.get("rate_limits") or {}
+    write_json(os.path.join(live, f"{pid}.json"), {
+        "at": now, "pid": pid, "cwd": j.get("cwd"), "busy": busy,
+        **{k: d.get(k) for k in ("model", "effort", "cost", "clock", "ctx", "ctxlen", "cache", "speed",
+                                 "tokens", "sid", "week", "fable")},
+        "ttft": first, "tool": tool,
+        "ttl_at": (j.get("prompt_cache") or {}).get("expires_at"),
+        "week_reset": (rl.get("seven_day") or {}).get("resets_at"),
+    })
+
+
 def main():
     now = time.time()
     if "--refresh-quotas" in sys.argv:
@@ -640,6 +674,13 @@ def main():
         fable_at = None
     ctx_value(d, j)
     usage_values(d, j, usage)
+    try:
+        write_live(j, d, first, tool, busy, now)
+    except OSError:
+        pass
+    if "--quiet" in sys.argv:  # a side panel shows it instead; keep feeding it and the quota caches
+        quotas(now)
+        return
     print(render(j, d, first, tool, busy, fable_at, now, {} if collapsed else quotas(now), collapsed))
 
 

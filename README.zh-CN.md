@@ -68,6 +68,12 @@ curl -fsSL https://raw.githubusercontent.com/risingjerry/claude-code-panel/main/
 
 `cc-panel --toggle` 隐藏或显示这一块（隐藏时也不再后台刷新）。想绑全局快捷键：在 Raycast 设置 → Script Commands → Script Folders 里加入 `extras/raycast`（或它的副本），再给 *Toggle Claude Code Panel Subscriptions* 录一个快捷键。设置 `CC_PANEL_QUOTAS=0` 可整体关闭。
 
+## 侧边栏模式（`--quiet`）
+
+每次刷新时，`cc-panel` 还会把当前会话的实时数值写入 `~/.cache/cc-panel/live/<pid>.json`，其中 `<pid>` 是该会话的 Claude Code 进程号（沿父进程链向上找名字含 `claude` 的进程，最多 4 层）。文件只写在本机，不发任何网络请求，包含字段：`at`（写入时间，Unix 秒）、`pid`、`cwd`、`busy`、`model`、`effort`、`cost`、`clock`、`ctx`、`ctxlen`、`cache`、`speed`、`tokens`、`sid`、`week`、`fable`、`ttft`、`tool`、`ttl_at`（提示缓存过期的 Unix 秒）、`week_reset`（周额度重置的 Unix 秒）。
+
+如果你想把这些信息放到终端旁边的侧边面板里显示（例如在 Herdr 桌面版右侧栏写一个自定义 mod，按终端里 Claude Code 的进程号显示当前标签会话的上下文、花费、缓存、TTFT 等，并在下方显示共享的订阅额度），可以把 `statusLine` 的 `command` 改成 `~/.local/bin/cc-panel --quiet`。加上 `--quiet` 后终端里不再画面板（输出为空，Claude Code 底部不显示状态栏），但每秒照常更新 `live/<pid>.json`，并照常触发其他订阅（`quotas.json`）和 `fable.json` 的后台刷新。
+
 ## 常见问题
 
 **能不能显示权限模式（bypass / plan）？** 不能。`▶▶ bypass permissions on` 那一行是 Claude Code 自己画在状态栏下面的，状态栏收到的数据里也没有权限模式。面板文字已经和那一行对齐，看起来是一个整体。
