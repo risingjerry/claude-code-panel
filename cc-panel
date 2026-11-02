@@ -252,7 +252,7 @@ def codex_quota():
             rc = res.get("rateLimitResetCredits") or {}
             exp = [c["expiresAt"] for c in rc.get("credits") or [] if c.get("status") == "available" and c.get("expiresAt")]
             return {"windows": wins, "resets": rc.get("availableCount", 0),
-                    "reset_expires": min(exp) if exp else None}
+                    "reset_expires": min(exp) if exp else None, "reset_expiries": sorted(exp)}
     finally:
         p.kill()
 
