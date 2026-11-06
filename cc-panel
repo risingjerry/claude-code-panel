@@ -296,9 +296,20 @@ def google_quota():
     reads quotas; piped, it prints one `group<TAB>limit<TAB>remaining%<TAB>UTC reset` line per limit."""
     if not shutil.which("agy"):
         return None
+    # Signed out, agy opens a Google sign-in tab on every call; shadow `open` so a background
+    # refresh never touches the browser (the row just goes stale until the user signs in).
+    shim = os.path.join(CACHE, "no-browser")
     try:
+        os.makedirs(shim, exist_ok=True)
+        for name in ("open", "xdg-open"):
+            p = os.path.join(shim, name)
+            if not os.path.exists(p):
+                with open(p, "w") as f:
+                    f.write("#!/bin/sh\nexit 0\n")
+                os.chmod(p, 0o755)
+        env = {**os.environ, "PATH": shim + os.pathsep + os.environ.get("PATH", ""), "BROWSER": "true"}
         out = subprocess.run(["agy", "-p", "/usage"], stdin=subprocess.DEVNULL, capture_output=True,
-                             text=True, cwd=CACHE, timeout=30).stdout
+                             text=True, cwd=CACHE, timeout=30, env=env).stdout
     except (OSError, subprocess.TimeoutExpired):
         return None
     limits = []
