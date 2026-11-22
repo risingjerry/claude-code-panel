@@ -69,6 +69,25 @@ class PanelTest(unittest.TestCase):
                              capture_output=True, text=True, timeout=20)
         self.assertEqual((out.returncode, out.stdout), (0, ""), out.stderr)
 
+    def test_usage_values_keeps_higher_same_window_cache_and_five_hour(self):
+        from datetime import datetime, timezone
+        reset_wk, reset_5h = 1_800_100_000, 1_800_010_000
+        j = {"rate_limits": {"seven_day": {"used_percentage": 7, "resets_at": reset_wk},
+                             "five_hour": {"used_percentage": 2, "resets_at": reset_5h}}}
+        usage = {"weeklyUsage": 93, "weeklyResetAt": datetime.fromtimestamp(reset_wk, timezone.utc).isoformat(),
+                 "sessionUsage": 9, "sessionResetAt": datetime.fromtimestamp(reset_5h, timezone.utc).isoformat()}
+        d = {}
+        with unittest.mock.patch.object(panel, "fable_usage", return_value=("57%", False)):
+            panel.usage_values(d, j, usage)
+        self.assertEqual((d["week"], d["session"], d["fable"]), ("93%", "9%", "57%"))
+        self.assertEqual(d["stale"], set())
+        # Different reset window (a rolled-over week): keep the live 0% rather than old 93%.
+        j_rolled = {"rate_limits": {"seven_day": {"used_percentage": 0, "resets_at": reset_wk + 7 * 86400}}}
+        d_rolled = {}
+        with unittest.mock.patch.object(panel, "fable_usage", return_value=("0%", False)):
+            panel.usage_values(d_rolled, j_rolled, usage)
+        self.assertEqual(d_rolled["week"], "0%")
+
 
 if __name__ == "__main__":
     unittest.main()
