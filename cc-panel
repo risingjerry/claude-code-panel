@@ -371,6 +371,23 @@ def refresh_quotas():
     finally:
         os.close(fd)
         os.remove(lock)
+    live = os.path.join(CACHE, "live")
+    if os.path.isdir(live):
+        now = time.time()
+        for name in os.listdir(live):
+            p = os.path.join(live, name)
+            try:
+                if name.endswith(".json") and name[:-5].isdigit():
+                    os.kill(int(name[:-5]), 0)
+                elif now - os.path.getmtime(p) > 300:
+                    os.remove(p)
+            except ProcessLookupError:
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+            except OSError:
+                pass
 
 
 def quotas(now):
@@ -591,15 +608,29 @@ def ctx_value(d, j):
     d["ctx"] = f"{min(round(used / window * 100), 100)}%"
 
 
+def iso_ts(value):
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
+    except (ValueError, TypeError):
+        return None
+
+
 def usage_values(d, j, usage):
     """WK comes straight from Claude Code's rate_limits (no API call); a session that has not
-    sent a request yet lacks them, so it shows the last cached value greyed out."""
+    sent a request yet lacks them, so it shows the last cached value greyed out. An idle session
+    still in the same reset window takes the higher cached usage so it never writes an old lower %."""
     rl, d["stale"] = j.get("rate_limits") or {}, set()
-    for key, live, field in (("week", "seven_day", "weeklyUsage"),):
-        pct = (rl.get(live) or {}).get("used_percentage")
-        if pct is None and isinstance(usage.get(field), (int, float)):
-            pct = usage[field]
+    for key, live, field, rfield in (("week", "seven_day", "weeklyUsage", "weeklyResetAt"),
+                                     ("session", "five_hour", "sessionUsage", "sessionResetAt")):
+        win = rl.get(live) or {}
+        pct, reset = win.get("used_percentage"), win.get("resets_at")
+        cached, cached_reset = usage.get(field), iso_ts(usage.get(rfield))
+        if pct is None and isinstance(cached, (int, float)):
+            pct = cached
             d["stale"].add(key)
+        elif (isinstance(pct, (int, float)) and isinstance(cached, (int, float))
+              and reset and cached_reset and abs(cached_reset - reset) < 300 and cached > pct):
+            pct = cached
         d[key] = "" if pct is None else f"{round(pct)}%"
     d["fable"], old = fable_usage(time.time())
     if not d["fable"] and isinstance(usage.get("fableUsage"), (int, float)):
@@ -636,10 +667,11 @@ def write_live(j, d, first, tool, busy, now):
     write_json(os.path.join(live, f"{pid}.json"), {
         "at": now, "pid": pid, "cwd": j.get("cwd"), "busy": busy,
         **{k: d.get(k) for k in ("model", "effort", "cost", "clock", "ctx", "ctxlen", "cache", "speed",
-                                 "tokens", "sid", "week", "fable")},
+                                 "tokens", "sid", "week", "session", "fable")},
         "ttft": first, "tool": tool,
         "ttl_at": (j.get("prompt_cache") or {}).get("expires_at"),
         "week_reset": (rl.get("seven_day") or {}).get("resets_at"),
+        "session_reset": (rl.get("five_hour") or {}).get("resets_at"),
     })
 
 
